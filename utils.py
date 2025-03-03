@@ -4,8 +4,7 @@ import math
 import sys
 import os
 
-sys.path.append(os.path.join( os.path.dirname(os.path.abspath(__file__)), 'externals/simplediffusion'))
-from externals.simplediffusion.distributions import GaussianMixtureDistribution, GaussianDistribution
+from distributions import GaussianMixtureDistribution, GaussianDistribution
 
 # wrapper class to make torch implementation of priors compatible with PyDream
 class Parameter:

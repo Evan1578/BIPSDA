@@ -1,39 +1,19 @@
 import torch.nn as nn
 import tqdm
-from externals.daps.sampler import Scheduler as DiffusionScheduler, DiffusionSampler, Trajectory
+from solver_utils import DiffusionScheduler, Trajectory, DiffusionSampler
 import torch
 import math
 import numpy as np
-import time
 from abc import ABC, abstractmethod
 import logging
-from torch.autograd.functional import vjp, jacobian, hessian
-from utils import Parameter, Likelihood, extract_samples_from_chain
-from pydream import core
-from pydream import convergence
-import sys
-import random
-import os
-sys.path.append(os.path.join( os.path.dirname(os.path.abspath(__file__)), 'externals/simplediffusion'))
-from externals.simplediffusion import distributions
-
-'''
-The main class here is GIPSDA, which will be a generalized version of the DAPS class in externals/daps/sampler.py. It will be generalized in the 
-sense that:
-(1) The method can be used to either compute samples from the posterior (as in DAPS) or estimate the MAP point. These two options correspond to two 
-different ways of incorporating measurement information from the inverse problem: using Langevin dynamics (as in DAPS), or using a proximal 
-problem solve, respectively.  
-(2) The forward diffusion process incorporates a parameter that can be used to toggle between a "fully stochastic" and "fully deterministic" diffusion
-process. 
-'''
+from torch.autograd.functional import jacobian
 
 def get_solver(**kwargs):
     latent = kwargs['latent']
     kwargs.pop('latent')
     if latent:
         raise NotImplementedError
-    return GIPSDA(**kwargs)
-
+    return BIPSDA(**kwargs)
 
 class MeasurementSolver(ABC):
     """"
@@ -53,8 +33,6 @@ class MeasurementSolver(ABC):
         record (bool)
         """
         pass
-
-
 
 class mMALASampler(MeasurementSolver):
 
@@ -86,9 +64,6 @@ class mMALASampler(MeasurementSolver):
             precision = cinv_op
         # form metric tensor, inverse, and square root
         metric_tens = self.get_metric_tensor(x0hat, precision, operator, measurement)
-        #eig_vals = torch.linalg.eigvals(metric_tens)
-        #logging.info("The minimum eigenvalue (real part) was {:.4f}".format(torch.min(torch.real(eig_vals))))
-        #logging.info("The maximum absolute value of the eigenvalues (imaginary part) was {:.4f}".format(torch.max(torch.abs(torch.imag(eig_vals)))))
         try:
             metric_tens = self.get_metric_tensor(x0hat, precision, operator, measurement)
             sqrt_metric_tens = torch.linalg.cholesky(metric_tens)
@@ -185,51 +160,6 @@ class mMALASampler(MeasurementSolver):
         log_acceptance = compute_target_logprob(proposed) - compute_target_logprob(current) + reverse_logprob - transition_logprob
         acceptance = torch.exp(log_acceptance)
         return torch.clip(acceptance, min=0, max=1)
-        
-
-
-
-class PyDreamSampler(MeasurementSolver):
-    """
-    Measurement Solver that uses PyDream to sample from the prediction distribution. 
-    Requires for loop over the batch dimension. 
-    """
-
-    def __init__(self, num_chains, pydream_its):
-        self.num_chains = num_chains
-        self.pydream_its = pydream_its 
-        super().__init__()
-
-    def solve(self, x0hat, operator, measurement, cinv_op, ratio, cov_type, record=False, verbose=False):
-        # form covariance matrix 
-        if cov_type == 'identity':
-            precision = cinv_op*torch.unsqueeze(torch.eye(x0hat.shape[1], device=x0hat.device), dim=0).expand(x0hat.shape[0], -1, -1)
-        elif cov_type == 'exact':
-            precision = cinv_op
-        cov_matrix = torch.linalg.inv(precision)
-        x = torch.zeros_like(x0hat)
-        pbar = tqdm.trange(x0hat.shape[0]) if verbose else range(x0hat.shape[0])
-        init_time = time.time()
-        for idx in pbar:
-            # form prior 
-            prior = distributions.GaussianDistribution(x0hat[idx, :].to("cpu"), cov_matrix[idx, :, :].to("cpu"))
-            # form Pydream-compatible likelihood and prior
-            parameter = Parameter(prior, operator.data_dim)
-            likelihood = Likelihood(operator, torch.reshape(measurement[idx, :].to("cpu"), (1, -1)))
-            # run pyDream
-            nchains = self.num_chains
-            pydream_its = self.pydream_its
-            params, _ = core.run_dream([parameter], likelihood, nchains=nchains, niterations=pydream_its, save_history=False, verbose=False, start_random=True)
-            # compute GR summary statistic
-            GR = convergence.Gelman_Rubin(params)
-            x[idx, :] = torch.tensor(params[0][-1, :], dtype=torch.float32, device=x.device)
-            if verbose:
-                pbar.set_postfix({'Max GR Val': '{:.4f}'.format(np.max(GR))})
-        if verbose:
-            elapsed_time = time.time() - init_time
-            logging.info("Tbe sampling took {:.4f} seconds to complete {:d} iterations".format(elapsed_time, x0hat.shape[0]))
-        return x
-        
 
 
 class ExactSampler(MeasurementSolver):
@@ -331,7 +261,7 @@ class LangevinDynamics(MeasurementSolver):
 
 
 
-class CheatRTO(MeasurementSolver):
+class RTO(MeasurementSolver):
     """
     Produces an approximate sample from the posterior distribution by solving the deterministic
     proximal problem \argmin_x \frac{1}{2\sigma_n^2} ||y - A(x) + \epsilon ||_2^2 + \frac{\rho}{2} || x - \hat{x} + \tau ||_2^2, 
@@ -464,20 +394,9 @@ class ProximalSolver(MeasurementSolver):
                     loss += (1/2)* torch.sum((x - x0hat) * cinv_op(x-x0hat))
                     loss.backward()
                     return loss
-        elif self.solver == 'gauss-newton':
-            optimizer = torch.optim.SGD([x]) # just for computing gradients
-            if cov_type == 'identity':
-                precision = cinv*torch.unsqueeze(torch.eye(x0hat.shape[1], device=x0hat.device), dim=0).expand(x0hat.shape[0], -1, -1)
-            elif cov_type == 'exact':
-                precision = cinv
-            else: 
-                raise Exception("Unknown covariance type!")
-            if operator.name != 'gaussphaseretrieval1D':
-                raise Exception("This method not implemented for this problem yet!")
         else: 
             raise Exception("Unknown solver type!")
         pbar = tqdm.trange(self.max_its) if verbose else range(self.max_its)
-        #print("Norm of x is {:.4f}".format(torch.linalg.norm(x).item()))
         for _ in pbar:
             if self.solver == 'sgd':
                 optimizer.zero_grad()
@@ -487,19 +406,6 @@ class ProximalSolver(MeasurementSolver):
                 optimizer.step()
             elif self.solver == 'lbfgs':
                 optimizer.step(closure)
-            elif self.solver == 'gauss-newton':
-                optimizer.zero_grad()
-                def loss_fn(x):
-                    loss =  -1. * operator.log_likelihood(x, measurement)   # - log_likelihood 
-                    loss += torch.sum((1/2)* (x - x0hat) * cinv_op(x-x0hat), dim=-1)
-                    return loss
-                loss = torch.sum(loss_fn(x))
-                loss.backward()
-                with torch.no_grad():
-                    xgrad = x.grad.detach()
-                    gauss_newton_hessian = operator.form_gauss_newton_hessian(precision, x)
-                    update = torch.linalg.solve(gauss_newton_hessian, xgrad)
-                    x.data = self._backtracking_line_search(x.data, -1. * update.data, xgrad.data, loss_fn)
             if x.grad is not None:
                 grad_norm = torch.linalg.norm(torch.flatten(x.grad, start_dim=1), dim=1)
                 norm_grad_norm = torch.divide(grad_norm, baseline_norm)
@@ -509,34 +415,8 @@ class ProximalSolver(MeasurementSolver):
                     if verbose:
                         logging.info("Terminating early - gradient norm less than tolerance for entire batch")
                     return x.detach()
-        #logging.info("The relative gradient norm is {:.4f}".format(torch.mean(norm_grad_norm).item()))
-
-         # early stopping with NaN or if relative gradient norm less than tolerance for all samples
         x = self._check_escape(x)
         return x.detach()
-    
-    def _backtracking_line_search(self, init, direc, grad, loss_fn, c=1e-4):
-        inner_product = torch.sum(direc*grad, dim=-1) # inner product of gradient and search direction
-        alphas = torch.zeros(init.shape[0], device=init.device) # step_sizes 
-        satisfied = torch.zeros(init.shape[0], dtype=torch.bool, device=init.device)
-        init_val = loss_fn(init)
-        not_converge = True
-        alpha_cur = 1
-        alpha_min = 1e-6
-        while not_converge:
-            check = loss_fn(init + alpha_cur * direc) 
-            is_satisfied = torch.le(check, init_val + c*alpha_cur*inner_product)
-            first_satisfied = torch.logical_and(is_satisfied, torch.logical_not(satisfied))
-            alphas = first_satisfied * alpha_cur
-            satisfied = torch.logical_or(is_satisfied, satisfied)
-            if torch.count_nonzero(satisfied) == init.shape[0]:
-                break
-            elif alpha_cur <= alpha_min:
-                alphas = alpha_min * torch.logical_not(satisfied)
-                break
-            else:
-                alpha_cur /= 2
-        return init + torch.unsqueeze(alphas, dim=-1)*direc
 
     
 class GeneralizedDiffusionSampler(DiffusionSampler):
@@ -586,37 +466,33 @@ class GeneralizedDiffusionSampler(DiffusionSampler):
 
 
 
-class GIPSDA(nn.Module):
+class BIPSDA(nn.Module):
     """
-    Implementation of GIPSDA framework for solving inverse problems. 
+    Implementation of BIPSDA framework for solving inverse problems. 
     """
 
-    def __init__(self, annealing_scheduler_config, diffusion_scheduler_config, beta_scheduler_config, measurement_config, mode, cov_type, pred_alg):
+    def __init__(self, annealing_scheduler_config, operator_name, diffusion_scheduler_config, measurement_config, mode, cov_type, pred_alg):
         super().__init__()
         annealing_scheduler_config, diffusion_scheduler_config = self._check(annealing_scheduler_config, diffusion_scheduler_config)
-        self.annealing_scheduler = annealing_scheduler = DiffusionScheduler(**annealing_scheduler_config)
-        self.beta_schedule = self._get_beta_schedule(beta_scheduler_config, annealing_scheduler)
+        self.annealing_scheduler = DiffusionScheduler(**annealing_scheduler_config)
         self.diffusion_scheduler_config = diffusion_scheduler_config
-        if mode == 'langevin_dynamics':
+        if mode == 'langevin_dynamics' and operator_name == 'gaussphaseretrieval1D':
+            self.data_consistency = mMALASampler(**measurement_config)
+        elif mode == 'langevin_dynamics':
             self.data_consistency = LangevinDynamics(**measurement_config)
         elif mode == 'map_estimation':
             self.data_consistency = ProximalSolver(measurement_config)
-        elif mode == 'exact_posterior_sampling':
+        elif mode == 'RTO' and operator_name == 'inpainting1D':
             self.data_consistency = ExactSampler(**measurement_config)
-        elif mode == 'pydream_sampling':
-            self.data_consistency = PyDreamSampler(**measurement_config)
-        elif mode == 'mMALA':
-            self.data_consistency = mMALASampler(**measurement_config)
-        elif mode == 'cheatRTO':
-            self.data_consistency = CheatRTO(measurement_config)
+        elif mode == 'RTO':
+            self.data_consistency = RTO(measurement_config)
         else:
             raise Exception("Unknown data consistency mode provided")
         self.cov_type = cov_type
         self.pred_alg = pred_alg
         self.failed_indices = []
 
-    def solve(self, model, x_start, operator, measurement, evaluator, record=False, verbose=False, gt=None):
-        #TODO: add prediction_dist = 'Gaussian' or 'Gaussian Mixture'?
+    def solve(self, model, x_start, operator, measurement, record=False, verbose=False, gt=None):
         '''
         Solve Inverse Problem in GIPSDA framework
 
@@ -634,8 +510,6 @@ class GIPSDA(nn.Module):
         xt = x_start
         for step in pbar:
 
-            #print("Norm is {:.4f}".format(torch.linalg.norm(xt).item()))
-
             sigma = self.annealing_scheduler.sigma_steps[step]
 
             # 1. Reverse diffusion:
@@ -649,79 +523,26 @@ class GIPSDA(nn.Module):
 
             # 3. Forward Diffusion
             sigma_next = self.annealing_scheduler.sigma_steps[step + 1]
-            beta = self.beta_schedule[step]
-            it_change = xt - x0y
-            xt = x0y + (math.sqrt(sigma_next*sigma_next - beta*beta)/sigma) * it_change  + beta * torch.randn_like(x0y)
-
-            # 4. Evaluation
-            x0hat_results = x0y_results = None
-            if evaluator and gt is not None:
-                with torch.no_grad():
-                    x0hat_results = evaluator(gt, measurement, x0hat)
-                    x0y_results = evaluator(gt, measurement, x0y)
-
-                # record
-                if verbose:
-                    main_eval_fn_name = evaluator.main_eval_fn_name
-                    pbar.set_postfix({
-                        'x0hat' + '_' + main_eval_fn_name: f"{x0hat_results[main_eval_fn_name].item():.2f}",
-                        'x0y' + '_' + main_eval_fn_name: f"{x0y_results[main_eval_fn_name].item():.2f}",
-                    })
-            if record:
-                self._record(xt, x0y, x0hat, sigma, beta, x0hat_results, x0y_results)
-            try:
-                self.failed_indices = self.data_consistency.failed_indices
-            except:
-                pass
+            xt = x0y + sigma_next * torch.randn_like(x0y)
                 
         return xt
-
-    def _get_beta_schedule(self, beta_scheduler_config, annealing_scheduler):
-
-        mode = beta_scheduler_config['mode']
-        sigma_schedule_omitfirst = annealing_scheduler.sigma_steps[1:]
-        
-        if mode == 'deterministic':
-            beta_schedule = np.zeros_like(sigma_schedule_omitfirst)
-        elif mode == 'full-stoch':
-            beta_schedule = sigma_schedule_omitfirst
-        elif mode == 'one-half':
-            beta_schedule = math.sqrt(.5)*sigma_schedule_omitfirst
-        elif mode == 'squared':
-            c = 1./ sigma_schedule_omitfirst[0]
-            beta_schedule = c * sigma_schedule_omitfirst**2
-        else:
-            raise Exception("Unknown mode")
-
-        return beta_schedule
 
     def _get_cinv(self, xt, model, sigma):
         if self.cov_type == 'identity':
             return 1/(sigma*sigma)
         elif self.cov_type == 'exact':
-            
             # compute inverse covariance matrix 
-            #logging.info("Norm of 4668th element is {:.4f}".format(torch.linalg.norm(xt[4668, :]).item()))
             fun = lambda x : torch.sum(model.score_wgrad(x, sigma), dim=0)
-            init_time = time.time() 
             xt.requires_grad = True
             J = jacobian(fun, xt, create_graph=False, strict=True).detach() #J will be of size x.shape x batch x x.shape
             xt.requires_grad = False
-            elapsed_time = time.time() - init_time
-            #logging.info("Jacobian computation took {:.4f} seconds".format(elapsed_time))
-            init_time = time.time() 
             J = torch.movedim(J, len(xt.shape) - 1, 0) #of size batch x x.shape x x.shape
             tot_size = torch.numel(xt[0, :])
             J = torch.reshape(J, (J.shape[0], tot_size, tot_size)) # of size batch x x_dim x x_dim
             id_batch = torch.eye(tot_size, device=xt.device).expand(J.shape)
             cov_matrix_unscaled = id_batch + (sigma*sigma)*(J)
-            #cov_matrix_unscaled = self._check_spd(cov_matrix_unscaled)
             cov_matrix = (sigma*sigma) * (cov_matrix_unscaled)
-            #logging.info("The relative norm of the Jacobian is {:.4f}".format(sigma* torch.linalg.norm(J)/math.sqrt(tot_size*J.shape[0])))
             cov_inv = torch.linalg.inv(cov_matrix)
-            elapsed_time = time.time() - init_time
-            #logging.info("Additional computations took {:.4f} seconds".format(elapsed_time))
-            #return lambda x: (torch.matmul(cov_inv, x.reshape(xt.shape[0], tot_size, 1)).reshape(xt.shape))
             return cov_inv
         else:
             raise Exception("Covariance inverse operator type not coded yet!")
@@ -744,7 +565,7 @@ class GIPSDA(nn.Module):
         annealing_scheduler_config['sigma_final'] = 0
         return annealing_scheduler_config, diffusion_scheduler_config
 
-    def _record(self, xt, x0y, x0hat, sigma, beta, x0hat_results, x0y_results):
+    def _record(self, xt, x0y, x0hat, sigma, x0hat_results, x0y_results):
         """
             Records the intermediate states during optimization.
         """
@@ -752,7 +573,6 @@ class GIPSDA(nn.Module):
         self.trajectory.add_tensor(f'x0y', x0y)
         self.trajectory.add_tensor(f'x0hat', x0hat)
         self.trajectory.add_value(f'sigma', sigma)
-        self.trajectory.add_value(f'beta', beta)
         if x0hat_results is not None:
             for name in x0hat_results.keys():
                 self.trajectory.add_value(f'x0hat_{name}', x0hat_results[name])
