@@ -1,7 +1,5 @@
 import os
 import math
-import copy
-import sys
 
 import torch
 import tensorflow as tf
@@ -212,7 +210,7 @@ def run_mixture_sampling(args, config, resultsfolder):
                 trial_results['gt_samples2'] = pydream_sample(workdir, prior, operator, measurement, nchains=config.gt_sampling.num_chains, its=config.gt_sampling.pydream_its, nsamples=args.samples_per_trial, 
                                                               seed_history=config.gt_sampling.seed_history, is_gaussian=config.gt_sampling.is_gaussian)
         else: # if computing BIPSDA samples
-            class GIPSDAModelWrapper:
+            class BIPSDAModelWrapper:
                 def __init__(self, model, gt_dist=None, use_exact=False):
                     self.model = model
                     self.score_model_fn = score_model.get_model_fn(model, train=False, energy=True)
@@ -240,7 +238,7 @@ def run_mixture_sampling(args, config, resultsfolder):
                         raise Exception("Exact score not implemented for this problem!")
                     convolved_dist = get_convolved_distribution(self.dist, sigma)
                     return convolved_dist.score_function(x)
-            gipsda_model = GIPSDAModelWrapper(model, prior, use_exact=args.use_exact_score)
+            bipsda_model = BIPSDAModelWrapper(model, prior, use_exact=args.use_exact_score)
             solver = get_solver(**config.sampler, operator_name = config.operator.name, measurement_config=config.data_consist, mode=args.mode, cov_type=config.cov_type, pred_alg=config.pred_alg)
             if args.use_exact_score and config.operator.name == 'inpainting1D':
                 # sample from the ground truth posterior
@@ -253,7 +251,7 @@ def run_mixture_sampling(args, config, resultsfolder):
                 x_start = solver.get_start(sample.repeat(args.samples_per_trial, 1).to(device))
             measurement_repeated = measurement.repeat(args.samples_per_trial, 1).to(device)
             try:
-                trial_results["samples"] = solver.solve(gipsda_model, x_start, operator, measurement_repeated, record=False, verbose=args.verbose, gt=None).cpu()
+                trial_results["samples"] = solver.solve(bipsda_model, x_start, operator, measurement_repeated, record=False, verbose=args.verbose, gt=None).cpu()
                 trial_results["failed_indices"] = solver.failed_indices
             except:
                 logging.info("Oh no! Trial failed")

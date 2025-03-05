@@ -136,7 +136,7 @@ def test_mmd_metric(eval_ops, resultsfolder, eval_name):
     logging.info('Testing batch implementation of mmd loss ...')
     mmd_kernel = RBF(bandwidth = 1., mul_factor=1., n_kernels=1)
     x1 = results[0]['gt_samples'][:1000, :]
-    x2 = results[0]['gipsda:0'][:1000, :]
+    x2 = results[0]['bipsda:0'][:1000, :]
     mmd_loss_official = MMDLoss(mmd_kernel)
     official_mmd = mmd_loss_official(x1, x2)
     my_mmd = batch_mmd_loss(x1, x2, mmd_kernel, batch_size=1e7)
@@ -147,8 +147,8 @@ def test_mmd_metric(eval_ops, resultsfolder, eval_name):
     measurement = results[0]["measurement"] 
     gt_samples = results[0]['gt_samples']
     gt_samples2 = results[0]['gt_samples2']
-    gispda0_samples = results[0]['gipsda:0']
-    gispda1_samples = results[0]['gipsda:1']
+    gispda0_samples = results[0]['bipsda:0']
+    gispda1_samples = results[0]['bipsda:1']
 
     # test as function of number of samples
     size_subset = 1000
@@ -163,14 +163,14 @@ def test_mmd_metric(eval_ops, resultsfolder, eval_name):
         logging.info('The number of samples is {:d}'.format(n_sample))
         mmd_kernel = RBF(bandwidth = kernel_bandwidth, mul_factor=2., n_kernels=1)
         mmd_loss_official = MMDLoss(mmd_kernel)
-        stats[0, idx] = gipsda0_mmd = mmd_loss_official(gispda0_samples[:n_sample, :], gt_samples[:n_sample, :])
-        stats[1, idx] = gipsda1_mmd = mmd_loss_official(gispda1_samples[:n_sample, :], gt_samples[:n_sample, :])
+        stats[0, idx] = bipsda0_mmd = mmd_loss_official(gispda0_samples[:n_sample, :], gt_samples[:n_sample, :])
+        stats[1, idx] = bipsda1_mmd = mmd_loss_official(gispda1_samples[:n_sample, :], gt_samples[:n_sample, :])
         stats[2, idx] = gt_mmd = mmd_loss_official(gt_samples2[:n_sample, :], gt_samples[:n_sample, :])
-        logging.info("The mmd error for GIPSDA:0 (DAPS) was {:.4f}".format(gipsda0_mmd))
-        logging.info("The mmd error for GIPSDA:1 (DiffPIR) was {:.4f}".format(gipsda1_mmd))
+        logging.info("The mmd error for BIPSDA:0 (DAPS) was {:.4f}".format(bipsda0_mmd))
+        logging.info("The mmd error for BIPSDA:1 (DiffPIR) was {:.4f}".format(bipsda1_mmd))
         logging.info("The mmd error between two sets of i.i.d. samples from ground truth posterior was {:.4f}".format(gt_mmd))
-    plt.plot(num_samples, stats[0, :], label='GIPSDA:0 (DAPS)')
-    plt.plot(num_samples, stats[1, :], label='GIPSDA:1 (DiffPIR)')
+    plt.plot(num_samples, stats[0, :], label='BIPSDA:0 (DAPS)')
+    plt.plot(num_samples, stats[1, :], label='BIPSDA:1 (DiffPIR)')
     plt.plot(num_samples, stats[2, :], label='GT')
     plt.title('MMD metric')
     plt.xlabel('Number of Samples')
@@ -188,14 +188,14 @@ def test_mmd_metric(eval_ops, resultsfolder, eval_name):
         logging.info('The correlation length is {:.4f}'.format(corr_sigma))
         mmd_kernel = RBF(bandwidth = 1/(2*corr_sigma*corr_sigmas), mul_factor=2., n_kernels=1)
         mmd_loss_official = MMDLoss(mmd_kernel)
-        stats[0, idx] = gipsda0_mmd = mmd_loss_official(gispda0_samples, gt_samples)
-        stats[1, idx] = gipsda1_mmd = mmd_loss_official(gispda1_samples, gt_samples)
+        stats[0, idx] = bipsda0_mmd = mmd_loss_official(gispda0_samples, gt_samples)
+        stats[1, idx] = bipsda1_mmd = mmd_loss_official(gispda1_samples, gt_samples)
         stats[2, idx] = gt_mmd = mmd_loss_official(gt_samples2, gt_samples)
-        logging.info("The mmd error for GIPSDA:0 (DAPS) was {:.4f}".format(gipsda0_mmd))
-        logging.info("The mmd error for GIPSDA:1 (DiffPIR) was {:.4f}".format(gipsda1_mmd))
+        logging.info("The mmd error for BIPSDA:0 (DAPS) was {:.4f}".format(bipsda0_mmd))
+        logging.info("The mmd error for BIPSDA:1 (DiffPIR) was {:.4f}".format(bipsda1_mmd))
         logging.info("The mmd error between two sets of i.i.d. samples from ground truth posterior was {:.4f}".format(gt_mmd))
-    plt.plot(corr_sigmas, stats[0, :], label='GIPSDA:0 (DAPS)')
-    plt.plot(corr_sigmas, stats[1, :], label='GIPSDA:1 (DiffPIR)')
+    plt.plot(corr_sigmas, stats[0, :], label='BIPSDA:0 (DAPS)')
+    plt.plot(corr_sigmas, stats[1, :], label='BIPSDA:1 (DiffPIR)')
     plt.plot(corr_sigmas, stats[2, :], label='GT')
     plt.title('MMD metric')
     plt.xlabel('Correlation Length')
@@ -217,14 +217,14 @@ def test_mmd_metric(eval_ops, resultsfolder, eval_name):
         logging.info('The number of kernels is {:d}'.format(nkernel))
         mmd_kernel = RBF(bandwidth = kernel_bandwidth, mul_factor=2., n_kernels=nkernel)
         mmd_loss_official = MMDLoss(mmd_kernel)
-        stats[0, idx] = gipsda0_mmd = mmd_loss_official(gispda0_samples, gt_samples)
-        stats[1, idx] = gipsda1_mmd = mmd_loss_official(gispda1_samples, gt_samples)
+        stats[0, idx] = bipsda0_mmd = mmd_loss_official(gispda0_samples, gt_samples)
+        stats[1, idx] = bipsda1_mmd = mmd_loss_official(gispda1_samples, gt_samples)
         stats[2, idx] = gt_mmd = mmd_loss_official(gt_samples2, gt_samples)
-        logging.info("The mmd error for GIPSDA:0 (DAPS) was {:.4f}".format(gipsda0_mmd))
-        logging.info("The mmd error for GIPSDA:1 (DiffPIR) was {:.4f}".format(gipsda1_mmd))
+        logging.info("The mmd error for BIPSDA:0 (DAPS) was {:.4f}".format(bipsda0_mmd))
+        logging.info("The mmd error for BIPSDA:1 (DiffPIR) was {:.4f}".format(bipsda1_mmd))
         logging.info("The mmd error between two sets of i.i.d. samples from ground truth posterior was {:.4f}".format(gt_mmd))
-    plt.plot(nkernels, stats[0, :], label='GIPSDA:0 (DAPS)')
-    plt.plot(nkernels, stats[1, :], label='GIPSDA:1 (DiffPIR)')
+    plt.plot(nkernels, stats[0, :], label='BIPSDA:0 (DAPS)')
+    plt.plot(nkernels, stats[1, :], label='BIPSDA:1 (DiffPIR)')
     plt.plot(nkernels, stats[2, :], label='GT')
     plt.title('MMD metric')
     plt.xlabel('Number of Kernels')
@@ -266,8 +266,8 @@ def test_cmd_metric(eval_ops, resultsfolder, eval_name):
         measurement = result["measurement"] 
         gt_samples = result['gt_samples']
         gt_samples2 = result['gt_samples2']
-        gispda0_samples = result['gipsda:0']
-        gispda1_samples = result['gipsda:1']
+        gispda0_samples = result['bipsda:0']
+        gispda1_samples = result['bipsda:1']
         stds = [2, 3, 4, 5, 6, 7]
         Ks = [1, 2, 3, 4, 5, 6, 7, 8]
         range_gt = torch.max(gt_samples).item() - torch.min(gt_samples).item()
@@ -279,14 +279,14 @@ def test_cmd_metric(eval_ops, resultsfolder, eval_name):
             logging.info("Value of (b-a) used was {:d} * std of gt data; this corresponds to {:.4f}".format(std, b))
             for idx, K in enumerate(Ks):
                 logging.info("Number of moments used was {:d}".format(K))
-                stats[0, idx] = gipsda0_cmd = cmd(gispda0_samples, gt_samples, b=b, a=a, n_moments=K)
-                stats[1, idx] = gipsda1_cmd = cmd(gispda1_samples, gt_samples, b=b, a=a, n_moments=K)
+                stats[0, idx] = bipsda0_cmd = cmd(gispda0_samples, gt_samples, b=b, a=a, n_moments=K)
+                stats[1, idx] = bipsda1_cmd = cmd(gispda1_samples, gt_samples, b=b, a=a, n_moments=K)
                 stats[2, idx] = gt_cmd = cmd(gt_samples2, gt_samples, b=b, a=a, n_moments=K)
-                logging.info("The cmd error for GIPSDA:0 (DAPS) was {:.4f}".format(gipsda0_cmd))
-                logging.info("The cmd error for GIPSDA:1 (DiffPIR) was {:.4f}".format(gipsda1_cmd))
+                logging.info("The cmd error for BIPSDA:0 (DAPS) was {:.4f}".format(bipsda0_cmd))
+                logging.info("The cmd error for BIPSDA:1 (DiffPIR) was {:.4f}".format(bipsda1_cmd))
                 logging.info("The cmd error between two sets of i.i.d. sampeles from ground truth posterior was {:.4f}".format(gt_cmd))
-            plt.plot(Ks, stats[0, :], label='GIPSDA:0 (DAPS)')
-            plt.plot(Ks, stats[1, :], label='GIPSDA:1 (DiffPIR)')
+            plt.plot(Ks, stats[0, :], label='BIPSDA:0 (DAPS)')
+            plt.plot(Ks, stats[1, :], label='BIPSDA:1 (DiffPIR)')
             plt.plot(Ks, stats[2, :], label='GT')
             plt.title('CMD metric (num stds = {:d})'.format(std))
             plt.legend()

@@ -1,3 +1,3 @@
 """
-Runner for all GIPSDA experiments
+Runner for all BIPSDA experiments
 """
