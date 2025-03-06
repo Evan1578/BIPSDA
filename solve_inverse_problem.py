@@ -2,7 +2,6 @@ import os
 import math
 
 import torch
-import tensorflow as tf
 import logging
 import pickle
 import numpy as np
@@ -112,9 +111,9 @@ def run_mixture_sampling(args, config, resultsfolder):
     random.seed(args.seed)
 
     # create directory for results
-    tf.io.gfile.makedirs(resultsfolder)
+    os.mkdir(resultsfolder)
     workdir = os.path.join(resultsfolder, args.name)
-    tf.io.gfile.makedirs(workdir)
+    os.mkdir(workdir)
 
     # initialize logger
     logging.basicConfig(

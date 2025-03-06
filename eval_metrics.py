@@ -5,7 +5,6 @@ import pickle
 import os
 import numpy as np
 import random
-import tensorflow as tf
 import math
 import matplotlib.pyplot as plt
 
@@ -115,7 +114,7 @@ def test_mmd_metric(eval_ops, resultsfolder, eval_name):
     # create directory for evaluation results
     workdir = os.path.join('results', resultsfolder)
     evaldir = os.path.join(workdir, eval_name)
-    tf.io.gfile.makedirs(evaldir)
+    os.makedir(evaldir)
 
 
     # initialize logger
@@ -244,7 +243,7 @@ def test_cmd_metric(eval_ops, resultsfolder, eval_name):
     # create directory for evaluation results
     workdir = os.path.join('results', resultsfolder)
     evaldir = os.path.join(workdir, eval_name)
-    tf.io.gfile.makedirs(evaldir)
+    os.mkdir(evaldir)
 
 
     # initialize logger

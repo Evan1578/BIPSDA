@@ -7,9 +7,7 @@ import pickle
 import random
 import math
 
-import ml_collections
 import numpy as np
-import tensorflow as tf
 import logging
 import torch
 import matplotlib.pyplot as plt
@@ -82,7 +80,7 @@ def run_eval(eval_ops, sampledir, gtdir, eval_name):
  
     # create directory for evaluation results
     evaldir = os.path.join(sampledir, eval_name)
-    tf.io.gfile.makedirs(evaldir)
+    os.mkdir(evaldir)
 
     # initialize logger
     logging.basicConfig(
@@ -136,7 +134,7 @@ def run_eval(eval_ops, sampledir, gtdir, eval_name):
     num_with_discarded = 0
     if plot_options in {'first', 'all', 'first10'}:
         plotdir = os.path.join(evaldir, 'Plots')
-        tf.io.gfile.makedirs(plotdir)
+        os.mkdir(plotdir)
     for idx, result in enumerate(results):
         # get results from dictionary
         measurement = result["measurement"] 

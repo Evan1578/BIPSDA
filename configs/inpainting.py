@@ -1,6 +1,5 @@
 import ml_collections
 import ml_collections.config_dict
-import yaml
 
 def get_config(mode):
 

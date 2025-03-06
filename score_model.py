@@ -7,7 +7,7 @@ import torch.nn as nn
 from __future__ import division
 from __future__ import unicode_literals
 import torch
-import tensorflow as tf
+import os
 import logging
 import torch.optim as optim
 import numpy as np
@@ -194,8 +194,8 @@ class ExponentialMovingAverage:
 
 
 def restore_checkpoint(ckpt_dir, state, device):
-  if not tf.io.gfile.exists(ckpt_dir):
-    tf.io.gfile.makedirs(os.path.dirname(ckpt_dir))
+  if not os.path.isdir(ckpt_dir):
+    os.mkdir(os.path.dirname(ckpt_dir))
     logging.warning(f"No checkpoint found at {ckpt_dir}. "
                     f"Returned the same state as input")
     return state

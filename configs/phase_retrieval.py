@@ -1,7 +1,5 @@
 import ml_collections
 import ml_collections.config_dict
-import yaml
-import torch
 
 def get_config(mode):
     config = ml_collections.ConfigDict()
