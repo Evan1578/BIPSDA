@@ -36,11 +36,11 @@ def get_config(mode):
     config.sampler = sampler
     # specify data consistency updates
     config.data_consist = data_consist =  ml_collections.ConfigDict()
-    if mode == 'langevin_dynamics':
+    if mode == 'Lang':
         data_consist.num_steps = 100
         data_consist.lr = 5e-5
         data_consist.lr_min_ratio = 1.
-    elif mode == 'map_estimation':
+    elif mode == 'MAP':
         data_consist.lambda_ = 1.
     elif mode == 'RTO':
         pass

@@ -4,8 +4,6 @@ Various functions and classes required to form and use score model
 
 import torch
 import torch.nn as nn
-from __future__ import division
-from __future__ import unicode_literals
 import torch
 import os
 import logging

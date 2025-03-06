@@ -40,11 +40,11 @@ def get_config(mode):
     config.sampler = sampler
     # specify data consistency updates
     config.data_consist = data_consist =  ml_collections.ConfigDict()
-    if mode == 'langevin_dynamics':
+    if mode == 'Lang':
         data_consist.num_its = 500
         data_consist.step_size = 2e-1
         data_consist.metric_type = 'gauss_newton'
-    elif (mode == 'map_estimation') or (mode == 'RTO'):
+    elif (mode == 'MAP') or (mode == 'RTO'):
         #data_consist.lambda_ = 1
         data_consist.max_its = 40
         data_consist.solver = 'lbfgs'
