@@ -65,7 +65,7 @@ class GaussianMixtureDistribution:
         return torch.log(exp_of_term)
 
     def score_function(self, x):
-        log_probs = torch.zeros(len(self.distributions), x.shape[0])
+        log_probs = torch.zeros(len(self.distributions), x.shape[0], device=x.device)
         for idx, distribution in enumerate(self.distributions):
             log_probs[idx, :] = distribution.log_prob(x)
         normalization_term = torch.max(log_probs, 0)[0]
@@ -88,7 +88,7 @@ class GaussianMixtureDistribution:
 
     def sample(self, num_samples=1):
         which_dist = torch.tensor(
-            np.random.choice(self.num_distributions, size=(num_samples, 1), replace=True, p=self.weights))
+            np.random.choice(self.num_distributions, size=(num_samples, 1), replace=True, p=self.weights), device=self.distributions[0].mean.device)
         samples = []
         for idx, distribution in enumerate(self.distributions):
             samples.append((which_dist == idx) * distribution.sample(num_samples=num_samples))
@@ -106,7 +106,7 @@ def get_convolved_distribution(distribution, noise_level):
             covariance = gauss_distribution.covariance_matrix
             mean = gauss_distribution.mean
             dim = len(mean)
-            dist_convolved = GaussianDistribution(mean, covariance + noise_level ** 2 * torch.eye(dim))
+            dist_convolved = GaussianDistribution(mean, covariance + noise_level ** 2 * torch.eye(dim, device=mean.device))
             convolved_dists.append(dist_convolved)
         convolved_distribution = GaussianMixtureDistribution(convolved_dists, distribution.weights)
 

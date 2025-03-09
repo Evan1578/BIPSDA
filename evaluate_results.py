@@ -80,7 +80,7 @@ def run_eval(eval_ops, sampledir, gtdir, eval_name):
  
     # create directory for evaluation results
     evaldir = os.path.join(sampledir, eval_name)
-    os.mkdir(evaldir)
+    os.makedirs(evaldir, exist_ok=True)
 
     # initialize logger
     logging.basicConfig(
@@ -117,14 +117,9 @@ def run_eval(eval_ops, sampledir, gtdir, eval_name):
 
     # form projection matrices for visualization (assume observable subspace determined by linear operator on unknown variable)
     _, _, Vt = torch.linalg.svd(operator.A)
-    Vt_observed = Vt[0:meas_dim, :]
-    Vt_unobserved = Vt[meas_dim:, :]
-
-    if configs.operator.name == 'xray_tomography':
-        proj_matrix_one = torch.zeros((10, 2))
-        proj_matrix_one[0, 0] = proj_matrix_one[1, 1] = 1
-        proj_matrix_two = torch.zeros((10, 2))
-        proj_matrix_two[2, 0] = proj_matrix_two[3, 1] = 1
+    Vt_observed = Vt[0:2, :]
+    Vt_unobserved = Vt[-2:, :]
+    proj_matrix = torch.stack((Vt[0, :], Vt[-1, :]), dim=0).transpose(0, 1)
 
     # loop through results and plot results, compute metrics
     means_tot = []
@@ -134,7 +129,7 @@ def run_eval(eval_ops, sampledir, gtdir, eval_name):
     num_with_discarded = 0
     if plot_options in {'first', 'all', 'first10'}:
         plotdir = os.path.join(evaldir, 'Plots')
-        os.mkdir(plotdir)
+        os.makedirs(plotdir, exist_ok=True)
     for idx, result in enumerate(results):
         # get results from dictionary
         measurement = result["measurement"] 
@@ -150,10 +145,9 @@ def run_eval(eval_ops, sampledir, gtdir, eval_name):
             logging.info("Plotting results from " + str(idx) + "th trial ...")
             samples = result['samples']
             comp_generative_w_gt(samples[:eval_ops.num_plot, :], gt_samples[:eval_ops.num_plot, :], os.path.join(plotdir, 'daps_vs_gt_comps1_' + str(idx) + '.png'), 
-                                    proj_matrix=proj_matrix_one, colors=['#ff7f0e', '#1f77b4'], title='Two Random Components')
-            comp_generative_w_gt(samples[:eval_ops.num_plot, :], gt_samples[:eval_ops.num_plot, :], os.path.join(plotdir, 'daps_vs_gt_comps2_' + str(idx) + '.png'), 
-                                    proj_matrix=proj_matrix_two, colors=['#ff7f0e', '#1f77b4'], title='Two More Random Componecnnts')
-            comp_generative_w_gt(samples[:eval_ops.num_plot, :], gt_samples[:eval_ops.num_plot, :], os.path.join(plotdir, 'daps_vs_gt_random_' + str(idx) + '.png'))
+                                    title = 'Projection onto singular vectors (largest and smallest)', proj_matrix=proj_matrix, colors=['#ff7f0e', '#1f77b4'])
+            comp_generative_w_gt(samples[:eval_ops.num_plot, :], gt_samples[:eval_ops.num_plot, :],  os.path.join(plotdir, 'daps_vs_gt_random_' + str(idx) + '.png'), 
+                                 title = 'Random Projection', colors=['#ff7f0e', '#1f77b4'])
             histogram_comp(samples, prior_log_prob, os.path.join(plotdir, 'hist_daps_prior_' + str(idx) + '.png'), color='#ff7f0e')
             histogram_comp(samples, likelihood_log_prob, os.path.join(plotdir, 'hist_daps_like_' + str(idx) + '.png'), color='#ff7f0e')
             histogram_comp(samples, posterior_log_prob, os.path.join(plotdir, 'hist_daps_post_' + str(idx) + '.png'), color='#ff7f0e')

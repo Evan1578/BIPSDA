@@ -9,6 +9,8 @@ import os
 import logging
 import torch.optim as optim
 import numpy as np
+import torch.autograd as autograd
+
 
 import sde_lib
 
@@ -191,14 +193,14 @@ class ExponentialMovingAverage:
     self.shadow_params = state_dict['shadow_params']
 
 
-def restore_checkpoint(ckpt_dir, state, device):
-  if not os.path.isdir(ckpt_dir):
-    os.mkdir(os.path.dirname(ckpt_dir))
-    logging.warning(f"No checkpoint found at {ckpt_dir}. "
+def restore_checkpoint(ckpt_path, state, device):
+  if not os.path.isfile(ckpt_path):
+    os.mkdir(os.path.dirname(ckpt_path))
+    logging.warning(f"No checkpoint found at {ckpt_path}. "
                     f"Returned the same state as input")
     return state
   else:
-    loaded_state = torch.load(ckpt_dir, map_location=device)
+    loaded_state = torch.load(ckpt_path, map_location=device)
     state['optimizer'].load_state_dict(loaded_state['optimizer'])
     state['model'].load_state_dict(loaded_state['model'], strict=False)
     state['ema'].load_state_dict(loaded_state['ema'])
@@ -241,6 +243,17 @@ def optimization_manager(config):
     if grad_clip >= 0:
       torch.nn.utils.clip_grad_norm_(params, max_norm=grad_clip)
     optimizer.step()
+
+def get_optimizer(config, params):
+  """Returns an optimizer object based on `config`."""
+  if config.optim.optimizer == 'Adam':
+    optimizer = optim.Adam(params, lr=config.optim.lr, betas=(config.optim.beta1, 0.999), eps=config.optim.eps,
+                           weight_decay=config.optim.weight_decay)
+  else:
+    raise NotImplementedError(
+      f'Optimizer {config.optim.optimizer} not supported yet!')
+
+  return optimizer
 
 
 def create_model(config):

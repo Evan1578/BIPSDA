@@ -111,9 +111,9 @@ def run_mixture_sampling(args, config, resultsfolder):
     random.seed(args.seed)
 
     # create directory for results
-    os.mkdir(resultsfolder)
+    os.makedirs(resultsfolder, exist_ok=True)
     workdir = os.path.join(resultsfolder, args.name)
-    os.mkdir(workdir)
+    os.makedirs(workdir, exist_ok=True)
 
     # initialize logger
     logging.basicConfig(
@@ -139,7 +139,7 @@ def run_mixture_sampling(args, config, resultsfolder):
         ema.copy_to(model.parameters())
         model.eval()
 
-    if args.use_exact_score and args.mode == 'GT':
+    if args.mode == 'GT':
         device = torch.device('cpu')
     elif args.use_exact_score:
         device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -241,7 +241,7 @@ def run_mixture_sampling(args, config, resultsfolder):
             solver = get_solver(**config.sampler, operator_name = config.operator.name, measurement_config=config.data_consist, mode=args.mode, cov_type=config.cov_type, pred_alg=config.pred_alg)
             if args.use_exact_score and config.operator.name == 'inpainting1D':
                 # sample from the ground truth posterior
-                posterior = get_mixture_gaussian_posterior(prior, torch.squeeze(measurement), operator.A, operator.sigma) # posterior on CPU
+                posterior = get_mixture_gaussian_posterior(prior, torch.squeeze(measurement).to(device), operator.A.to(device), operator.sigma) # posterior on CPU
                 x_start = posterior.sample(num_samples=args.samples_per_trial).to(device)
                 # then add noise
                 top_noise = solver.annealing_scheduler.sigma_max
@@ -249,13 +249,13 @@ def run_mixture_sampling(args, config, resultsfolder):
             else:
                 x_start = solver.get_start(sample.repeat(args.samples_per_trial, 1).to(device))
             measurement_repeated = measurement.repeat(args.samples_per_trial, 1).to(device)
-            try:
-                trial_results["samples"] = solver.solve(bipsda_model, x_start, operator, measurement_repeated, record=False, verbose=args.verbose, gt=None).cpu()
-                trial_results["failed_indices"] = solver.failed_indices
-            except:
-                logging.info("Oh no! Trial failed")
-                trial_results["samples"] = None
-                trial_results['failed_indices'] = None
+            #try:
+            trial_results["samples"] = solver.solve(bipsda_model, x_start, operator, measurement_repeated, record=False, verbose=args.verbose, gt=None).cpu()
+            trial_results["failed_indices"] = solver.failed_indices
+            #except:
+            #    logging.info("Oh no! Trial failed")
+            #    trial_results["samples"] = None
+            #    trial_results['failed_indices'] = None
         all_results.append(trial_results)
     logging.info("Finished Running Trials! Saving results ...")
     # save results

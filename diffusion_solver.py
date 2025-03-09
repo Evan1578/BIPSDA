@@ -36,7 +36,8 @@ class MeasurementSolver(ABC):
         """
         pass
 
-class mMALASampler(MeasurementSolver):
+class mMALASampler(MeasurementSolver):\
+
 
     def __init__(self, step_size, num_its, metric_type = 'none'):
         super().__init__()
@@ -199,11 +200,10 @@ class LangevinDynamics(MeasurementSolver):
     """
     Generalized version of Langevin dynamics class in DAPS that allows for general covariance matrics in p(m(0) | m(t)) (not just white noise covariance)
     """
-    def __init__(self,  num_steps, lr, tau=0.01, lr_min_ratio=0.01):
+    def __init__(self,  num_steps, lr, lr_min_ratio=0.01):
         super().__init__()
         self.num_steps = num_steps
         self.lr = lr
-        self.tau = tau
         self.lr_min_ratio = lr_min_ratio
     
     def solve(self, x0hat, operator, measurement, cinv, ratio, cov_type, record=False, verbose=False):
@@ -217,7 +217,6 @@ class LangevinDynamics(MeasurementSolver):
         cinv_op = self._get_cov_operator(cinv, cov_type)
         for _ in pbar:
             optimizer.zero_grad()
-            #operator.error(x, measurement).sum() / (2 * self.tau ** 2)
             loss = -1. * torch.sum(operator.log_likelihood(x, measurement))
             loss += (1/2)* torch.sum((x - x0hat)*(cinv_op(x-x0hat)))
             loss.backward()
@@ -478,11 +477,11 @@ class BIPSDA(nn.Module):
         annealing_scheduler_config, diffusion_scheduler_config = self._check(annealing_scheduler_config, diffusion_scheduler_config)
         self.annealing_scheduler = DiffusionScheduler(**annealing_scheduler_config)
         self.diffusion_scheduler_config = diffusion_scheduler_config
-        if mode == 'langevin_dynamics' and operator_name == 'gaussphaseretrieval1D':
+        if mode == 'Lang' and operator_name == 'gaussphaseretrieval1D':
             self.data_consistency = mMALASampler(**measurement_config)
-        elif mode == 'langevin_dynamics':
+        elif mode == 'Lang':
             self.data_consistency = LangevinDynamics(**measurement_config)
-        elif mode == 'map_estimation':
+        elif mode == 'MAP':
             self.data_consistency = ProximalSolver(measurement_config)
         elif mode == 'RTO' and operator_name == 'inpainting1D':
             self.data_consistency = ExactSampler(**measurement_config)
@@ -547,7 +546,7 @@ class BIPSDA(nn.Module):
             cov_inv = torch.linalg.inv(cov_matrix)
             return cov_inv
         else:
-            raise Exception("Covariance inverse operator type not coded yet!")
+            raise Exception("Covariance operator type not coded yet!")
 
     def _check_spd(self, cov_matrix_unscaled, epsilon=10**(-3)):
         try:

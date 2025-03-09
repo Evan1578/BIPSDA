@@ -32,19 +32,20 @@ class Operator(ABC):
     Abstract operator class
     Based on code in this repository: https://github.com/zhangbingliang2019/DAPS/tree/fb67270816876a3229b7768c18c8ab9cd2c0c10f
     """
-    def __init__(self, sigma=0.05):
-        self.sigma = sigma
+    def __init__(self):
+        pass
 
     @abstractmethod
     def __call__(self, x):
         pass
 
+    @abstractmethod
     def measure(self, x):
-        y0 = self(x)
-        return y0 + self.sigma * torch.randn_like(y0)
+        pass
 
+    @abstractmethod
     def log_likelihood(self, x, y):
-        return -self.error(x, y) / 2 / self.sigma ** 2
+        pass
 
     def likelihood(self, x, y):
         return torch.exp(self.log_likelihood(x, y))
@@ -71,11 +72,20 @@ class Inpainting1D(Operator):
         self.unobserved_indices = torch.tensor([x for x in all_indices if x not in observed_indices], device=A.device, dtype=torch.long)
         self.observed_indices = torch.tensor(observed_indices, device=A.device, dtype=torch.long)
         self.device = A.device
-        super().__init__(sigma=sigma)
+        self.sigma = sigma
+        super().__init__()
     
     def __call__(self, x):
         x_device = x.device
         return (x.to(self.device) @ self.At).to(x_device)
+    
+    def log_likelihood(self, x, y):
+        error = ((self(x) - y) ** 2).flatten(1).sum(-1)
+        return -error / 2 /self.sigma ** 2
+    
+    def measure(self, x):
+        y0 = self(x)
+        return y0 + self.sigma * torch.randn_like(y0)
     
     def solve_proximal(self, x0hat, measurement, cinv, cov_type, record=False, verbose=False, params=None):
         if cov_type == 'identity':
@@ -106,13 +116,22 @@ class GaussianPhaseRerieval1D(Operator):
         self.At = self.A.transpose(0, 1)
         self.meas_dim = dims[0]
         self.data_dim = dims[1]
-        super().__init__(sigma=sigma)
+        self.sigma = sigma
+        super().__init__()
 
     def __call__(self, x):
         if x.device != self.At.device:
             self.At = self.At.to(x.device)
         projected_data = x @ self.At
         return projected_data**2
+    
+    def log_likelihood(self, x, y):
+        error = ((self(x) - y) ** 2).flatten(1).sum(-1)
+        return -error / 2 /self.sigma ** 2
+    
+    def measure(self, x):
+        y0 = self(x)
+        return y0 + self.sigma * torch.randn_like(y0)
     
     def form_gauss_newton_hessian(self, precision, x):
         Ax = torch.squeeze(torch.matmul(torch.unsqueeze(self.A.to(x.device), dim=0), torch.unsqueeze(x, dim=-1)))
@@ -132,7 +151,7 @@ class XrayOperator(Operator):
         self.At = A.transpose(0, 1)
         self.meas_dim =A.shape[0]
         self.data_dim = A.shape[1]
-        super().__init__(sigma=.05)
+        super().__init__()
 
     def __call__(self, x):
         if x.device != self.At.device:
