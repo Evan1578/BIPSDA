@@ -1,5 +1,6 @@
 import os
 import math
+import time
 
 import torch
 import logging
@@ -250,7 +251,9 @@ def run_mixture_sampling(args, config, resultsfolder):
                 x_start = solver.get_start(sample.repeat(args.samples_per_trial, 1).to(device))
             measurement_repeated = measurement.repeat(args.samples_per_trial, 1).to(device)
             #try:
+            init_time = time.time()
             trial_results["samples"] = solver.solve(bipsda_model, x_start, operator, measurement_repeated, record=False, verbose=args.verbose, gt=None).cpu()
+            trial_results['total_time'] = time.time() - init_time
             trial_results["failed_indices"] = solver.failed_indices
             #except:
             #    logging.info("Oh no! Trial failed")

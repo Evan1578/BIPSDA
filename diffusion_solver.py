@@ -172,10 +172,23 @@ class ExactSampler(MeasurementSolver):
 
     def __init__(self):
         super().__init__()
+        self.failed_indices = []
 
 
     def solve(self, x0hat, operator, measurement, cinv_op, ratio, cov_type, record=False, verbose=False):
-
+        # check for rogue points
+        if torch.max(torch.abs(x0hat)) > 200:
+            vals, _ = torch.max(torch.abs(x0hat), dim=1)
+            escape_check = vals > 200
+            num_escape = torch.count_nonzero(escape_check).item()
+            escape_indices = torch.nonzero(escape_check)
+            logging.info("Oh no! {:d} samples escaped [-200, 200]^N Cube. Resetting these samples to the origin and marking as failed".format(num_escape))
+            for idx in range(escape_indices.shape[0]):
+                val = escape_indices[idx, :].item()
+                if val not in self.failed_indices:
+                    self.failed_indices.append(val)
+            with torch.no_grad():
+                x0hat = x0hat * (~ escape_check[:, None])
         # form posterior covariance
         term1 = torch.unsqueeze(operator.At @ operator.A / (operator.sigma * operator.sigma), dim=0).to(x0hat.device) # 1 x n x n
         if cov_type == 'identity':
@@ -190,7 +203,10 @@ class ExactSampler(MeasurementSolver):
         post_mean = torch.squeeze(torch.matmul(post_cov, torch.matmul(term2, torch.unsqueeze(x0hat, dim=-1)) + torch.matmul(measurement, operator.A.to(measurement.device))[:, :, None] /(operator.sigma * operator.sigma) ))
 
         # compute samples 
-        dist = torch.distributions.multivariate_normal.MultivariateNormal(post_mean, covariance_matrix=post_cov)
+        try:
+            dist = torch.distributions.multivariate_normal.MultivariateNormal(post_mean, covariance_matrix=post_cov)
+        except:
+            print('hi')
         samples = dist.sample()
 
         return samples
