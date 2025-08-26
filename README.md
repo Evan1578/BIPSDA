@@ -2,7 +2,7 @@
 
 Code for "Bayesian Inverse Problem Solvers through Diffusion Annealing" (BIPSDA), a framework for solving Bayesian inverse problems using diffusion models.
 
-The BIPDSA framework was introduced in ``Can Diffusion Models Provide Rigorous Uncertainty Quantification for Bayesian Inverse Problems?'' The published paper can be found [here](10.1109/OJSP.2025.3597867). The results of the numerical experiments conducted for this paper can be accessed directly [here](https://doi.org/10.7910/DVN/0L5KGB) to enable the analysis of the approximate posterior samples produced by the BIPDSA algorithms without running the code. 
+The BIPDSA framework was introduced in ``Benchmarking Diffusion Annealing-Based Bayesian Inverse Problem Solvers''. The published paper can be found [here](10.1109/OJSP.2025.3597867). The results of the numerical experiments conducted for this paper can be accessed directly [here](https://doi.org/10.7910/DVN/0L5KGB) to enable the analysis of the approximate posterior samples produced by the BIPDSA algorithms without running the code. 
 
 # Installation
 
